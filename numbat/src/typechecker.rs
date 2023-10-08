@@ -378,8 +378,9 @@ pub struct TypeChecker {
 }
 
 impl TypeChecker {
-    fn identifier_type(&self, span: Span, name: &str) -> Result<&Type> {
-        self.identifiers
+    fn identifier_type(&self, span: Span, name: &str) -> Result<Type> {
+        let id = self
+            .identifiers
             .get(name)
             .ok_or_else(|| {
                 let suggestion = suggestion::did_you_mean(
@@ -392,6 +393,24 @@ impl TypeChecker {
                 TypeCheckError::UnknownIdentifier(span, name.into(), suggestion)
             })
             .map(|(type_, _)| type_)
+            .cloned();
+
+        if id.is_err() {
+            if let Some(signature) = self.function_signatures.get(name) {
+                Ok(Type::Fn(
+                    signature
+                        .parameter_types
+                        .iter()
+                        .map(|(_, t)| t.clone())
+                        .collect(),
+                    Box::new(signature.return_type.clone()),
+                ))
+            } else {
+                id
+            }
+        } else {
+            id
+        }
     }
 
     pub(crate) fn check_expression(&self, ast: &ast::Expression) -> Result<typed_ast::Expression> {
@@ -1337,6 +1356,13 @@ impl TypeChecker {
                 .map_err(TypeCheckError::RegistryError),
             TypeAnnotation::Bool(_) => Ok(Type::Boolean),
             TypeAnnotation::String(_) => Ok(Type::String),
+            TypeAnnotation::Fn(_, param_types, return_type) => Ok(Type::Fn(
+                param_types
+                    .iter()
+                    .map(|p| self.type_from_annotation(p))
+                    .collect::<Result<Vec<_>>>()?,
+                Box::new(self.type_from_annotation(return_type)?),
+            )),
         }
     }
 }
