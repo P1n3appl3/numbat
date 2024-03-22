@@ -9,6 +9,7 @@ use config::{Config, ExchangeRateFetchingPolicy, IntroBanner, PrettyPrintMode};
 use highlighter::NumbatHighlighter;
 
 use itertools::Itertools;
+use numbat::currency::{ExchangeRates, ExchangeRatesCache};
 use numbat::diagnostic::ErrorDiagnostic;
 use numbat::help::help_markup;
 use numbat::markup as m;
@@ -27,9 +28,11 @@ use rustyline::{
 };
 use rustyline::{EventHandler, Highlighter, KeyCode, KeyEvent, Modifiers};
 
+use std::fs::File;
 use std::io::IsTerminal;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
+use std::time::{Duration, SystemTime};
 use std::{fs, thread};
 
 #[derive(Debug, PartialEq, Eq)]
@@ -205,6 +208,29 @@ impl Cli {
                 .lock()
                 .unwrap()
                 .load_currency_module_on_demand(true);
+        }
+
+        if self.config.exchange_rates.cache_rates {
+            let cache_path = self.config.exchange_rates.cache_path;
+            if let Some(dir) = cache_path.parent() {
+                let _ = fs::create_dir_all(dir);
+            }
+            ExchangeRatesCache::set_hooks(
+                |rates: &ExchangeRates| {
+                    if let Ok(f) = File::create(cache_path) {
+                        let _ = serde_json::to_writer_pretty(&f, rates);
+                    }
+                },
+                || {
+                    fs::metadata(&cache_path)
+                        .ok()
+                        .and_then(|m| m.modified().ok())
+                        .and_then(|mtime| SystemTime::now().duration_since(mtime).ok())
+                        .filter(|&dur| dur < Duration::from_secs(60 * 60 * 24))
+                        .and_then(|_| fs::read_to_string(&cache_path).ok())
+                        .and_then(|s: String| serde_json::from_str(&s).ok())
+                },
+            );
         }
 
         let mut code_and_source = Vec::new();

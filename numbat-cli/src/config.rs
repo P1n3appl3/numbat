@@ -1,3 +1,5 @@
+use std::path::PathBuf;
+
 use clap::ValueEnum;
 use serde::{Deserialize, Serialize};
 
@@ -34,9 +36,22 @@ pub enum ExchangeRateFetchingPolicy {
 
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case", default, deny_unknown_fields)]
-#[derive(Default)]
 pub struct ExchangeRateConfig {
     pub fetching_policy: ExchangeRateFetchingPolicy,
+    pub cache_rates: bool,
+    pub cache_path: PathBuf,
+}
+
+impl Default for ExchangeRateConfig {
+    fn default() -> Self {
+        Self {
+            fetching_policy: Default::default(),
+            cache_rates: true,
+            cache_path: dirs::cache_dir()
+                .unwrap_or_else(|| PathBuf::from("cache"))
+                .join("numbat/exchange_rates.json"),
+        }
+    }
 }
 
 #[derive(Serialize, Deserialize)]

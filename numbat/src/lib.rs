@@ -4,7 +4,7 @@ mod ast;
 pub mod buffered_writer;
 mod bytecode_interpreter;
 mod column_formatter;
-mod currency;
+pub mod currency;
 mod datetime;
 mod decorator;
 pub mod diagnostic;
